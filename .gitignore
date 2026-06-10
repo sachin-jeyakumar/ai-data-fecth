@@ -1,1 +1,35 @@
+# Environments
+venv/
+.env
+backend/.env
+
+# Python caching & builds
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local database and user uploads
+backend/chroma_db/
+backend/uploads/
+
+# Build artifacts and dynamic results
+extraction_result.json
+dist/
+frontend/dist/
+frontend/dist-ssr/
+
+# Dependency directories
+node_modules/
+frontend/node_modules/
+
+# OS/Editor configs
+.DS_Store
+.vscode/
+.idea/
+
+# Finetune specific subdirs (especially models and generated adapters)
 finetune/llama.cpp/
+finetune/output/
+finetune/training_data/

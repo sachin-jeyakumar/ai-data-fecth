@@ -1,0 +1,56 @@
+# ══════════════════════════════════════════════════════════════
+# Fine-tuning Configuration — AI Data Fetcher
+# ══════════════════════════════════════════════════════════════
+
+# ── Base Model ────────────────────────────────────────────────
+model:
+  # HuggingFace model ID (downloaded automatically on first run)
+  hf_id: "Qwen/Qwen2.5-0.5B-Instruct"
+
+  # After fine-tuning, the custom model will be registered in Ollama as:
+  ollama_name: "ai-data-fetcher-v1"
+
+# ── LoRA Hyperparameters ──────────────────────────────────────
+lora:
+  rank: 16            # LoRA rank — higher = more capacity, more memory
+  alpha: 32           # Scaling factor (usually 2x rank)
+  dropout: 0.05
+  target_modules:     # Layers to apply LoRA to
+    - q_proj
+    - v_proj
+    - k_proj
+    - o_proj
+
+# ── Training Hyperparameters ──────────────────────────────────
+training:
+  iterations: 5          # Number of training steps (increase to 1000 for better results)
+  batch_size: 2          # Per-device batch size (reduce to 1 if OOM)
+  learning_rate: 2.0e-5  # Learning rate
+  warmup_steps: 50       # Linear warmup
+  max_seq_length: 2048   # Max input+output token length
+  grad_checkpoint: true  # Gradient checkpointing to save memory
+  save_every: 100        # Save adapter checkpoint every N steps
+  eval_every: 50         # Evaluate on val set every N steps
+  val_batches: 10        # Number of validation batches
+
+# ── Dataset Paths ─────────────────────────────────────────────
+data:
+  pdfs_dir: "training_data/pdfs"           # Raw PDF brochures
+  labels_dir: "training_data/labels"       # Corresponding JSON extractions
+  processed_dir: "training_data/processed" # Auto-generated JSONL files
+  train_split: 0.85  # 85% train, 15% validation
+
+# ── Output Paths ─────────────────────────────────────────────
+output:
+  adapters_dir: "output/adapters"     # LoRA adapter weights
+  fused_dir: "output/fused_model"     # Merged model (adapter + base)
+  gguf_dir: "output/gguf"             # GGUF format for Ollama
+
+# ── System Prompt (used during training) ─────────────────────
+system_prompt: |
+  You are an expert product data extraction engine.
+  Your job is to read product brochures and extract ALL product details.
+  Always return valid JSON — an array of product objects.
+  Include every available field: name, model, price, specifications,
+  features, dimensions, weight, warranty, and any other details present.
+  If a field is not available, omit it. Never hallucinate data.

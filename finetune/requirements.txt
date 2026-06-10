@@ -1,0 +1,16 @@
+transformers==4.46.1    # HuggingFace (fallback for non-Apple-Silicon)
+peft==0.13.2            # LoRA adapters (fallback)
+datasets==3.1.0         # Dataset handling
+accelerate==1.0.1       # Training acceleration
+huggingface-hub==0.26.2 # Model downloading from HuggingFace
+
+# Data prep
+pdfplumber==0.11.4
+PyMuPDF==1.24.9
+pytesseract==0.3.13
+Pillow==10.4.0
+
+# Utilities
+pyyaml==6.0.2
+rich==13.8.1            # Beautiful terminal progress output
+typer==0.13.0           # CLI interface
