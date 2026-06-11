@@ -195,6 +195,11 @@ def extract_tables_for_orm(pdf_path: Path) -> list:
         with pdfplumber.open(pdf_path) as pdf:
             for page_index, page in enumerate(pdf.pages):
                 text = page.extract_text() or ""
+                
+                # If no text was found (e.g. scanned image), fallback to OCR
+                if not text.strip():
+                    text = _ocr_page(pdf_path, page_index)
+                    
                 tables = page.extract_tables()
                 
                 structured_tables = []
