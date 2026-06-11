@@ -197,10 +197,8 @@ def extract_tables_for_orm(pdf_path: Path) -> list:
                 text = page.extract_text() or ""
                 tables = page.extract_tables()
                 
-                # Only include pages that actually have tables, or have significant text
-                # to keep the ORM mapping focused on structured data.
+                structured_tables = []
                 if tables:
-                    structured_tables = []
                     for table in tables:
                         structured_table = []
                         for row in table:
@@ -208,13 +206,14 @@ def extract_tables_for_orm(pdf_path: Path) -> list:
                                 structured_table.append([str(c).strip().replace("\n", " ") if c is not None else "" for c in row])
                         if structured_table:
                             structured_tables.append(structured_table)
-                    
-                    if structured_tables:
-                        results.append({
-                            "page": page_index + 1,
-                            "text": text[:1000],  # Keep first 1000 chars as context (headers, descriptions)
-                            "tables": structured_tables
-                        })
+                
+                # Append the page if it has text OR tables.
+                if text.strip() or structured_tables:
+                    results.append({
+                        "page": page_index + 1,
+                        "text": text,  # Keep the full text
+                        "tables": structured_tables
+                    })
     except Exception as exc:
         logger.error(f"Failed to extract tables from {pdf_path}: {exc}")
     

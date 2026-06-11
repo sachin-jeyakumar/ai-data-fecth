@@ -216,7 +216,7 @@ async def _process_table_extraction_batch(page_data: Dict, batch_index: int, tot
             table_strings.append(" | ".join(row))
     tables_str = "\n".join(table_strings)
 
-    user_prompt = f"""Extract all product information strictly from the structured tables below.
+    user_prompt = f"""Extract all product information from the provided page text and structured tables below.
 Return a JSON array where each element is a product with all its details.
 
 For EVERY product object, extract the following core fields IF AND ONLY IF they exist in the text:
@@ -224,19 +224,19 @@ For EVERY product object, extract the following core fields IF AND ONLY IF they 
 - 'name': The specific descriptive name of the tool/product (e.g., "Cordless 15 GA Angled Finish Nailer"). Do NOT use the SKU here.
 - 'model': The alphanumeric part number, SKU code, or catalog identifier (e.g., "GFN1564K"). Look for it in specifications or column headers (like "SKU #", "Part #", or "Model #"). If it's not present, leave it blank. DO NOT guess or infer a model number.
 
-Include any other available details as fields IF AND ONLY IF they exist in the table (e.g., specifications, features, dimensions, weight, capacity).
+Include any other available details as fields IF AND ONLY IF they exist in the text or table (e.g., specifications, features, dimensions, weight, capacity).
 
 CRITICAL ANTI-HALLUCINATION RULES:
 1. DO NOT invent, guess, or assume ANY values, including category and model. If it's not written in the text, it does not exist. Leave it blank or omit it entirely.
-2. If a detail (like price, warranty, or dimensions) is NOT explicitly written in the table, you MUST omit the field completely. DO NOT make up fake prices or specs.
-3. Map EVERY row of the table into a product object. Do not drop or skip any rows!
+2. If a detail (like price, warranty, or dimensions) is NOT explicitly written in the text or table, you MUST omit the field completely. DO NOT make up fake prices or specs.
+3. Map every distinct product you find into a product object.
 4. DO NOT OUTPUT DUPLICATE ROWS. If multiple rows have exactly the same product data, only include it once.
-5. PRECISE DATA MATCHING: Ensure the extracted text matches the PDF table exactly, without typos or modifications.
+5. PRECISE DATA MATCHING: Ensure the extracted text matches the PDF exactly, without typos or modifications.
 
-PAGE TEXT CONTEXT (Headers/Descriptions):
+PAGE TEXT CONTEXT (Contains products if tables are empty):
 {page_text}
 
-STRUCTURED TABLES (Products):
+STRUCTURED TABLES (If available):
 {tables_str}
 
 Return ONLY the JSON array, no explanation."""
