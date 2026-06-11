@@ -50,10 +50,10 @@ def _openrouter_headers() -> dict:
     }
 
 def _use_groq() -> bool:
-    return bool(settings.GROQ_API_KEY)
+    return False
 
 def _use_openrouter() -> bool:
-    return bool(settings.OPENROUTER_API_KEY)
+    return False
 
 
 # ──────────────────────────────────────────────
