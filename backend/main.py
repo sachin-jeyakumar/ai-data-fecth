@@ -174,6 +174,17 @@ async def list_documents():
     ]
 
 
+@app.delete("/documents")
+async def delete_all_documents():
+    for doc_id, info in _document_registry.items():
+        embedding_service.delete_document(doc_id)
+        path = Path(info.get("path", ""))
+        if path.exists():
+            path.unlink()
+    _document_registry.clear()
+    _save_registry(_document_registry)
+    return {"message": "All documents deleted."}
+
 @app.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str):
     if doc_id not in _document_registry:

@@ -24,3 +24,16 @@ services:
     depends_on:
       - backend
     restart: always
+
+  # [LOCAL DEV ONLY] Automatically exposes the frontend to the internet via Ngrok
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ai_fetcher_ngrok
+    restart: always
+    environment:
+      - NGROK_AUTHTOKEN=38xwH9Y6WmQPNPDNHH0odJoOkdw_2BGDwbYZ3C1aQhGNcfmqK
+    command:
+      - "http"
+      - "frontend:80"
+    depends_on:
+      - frontend
