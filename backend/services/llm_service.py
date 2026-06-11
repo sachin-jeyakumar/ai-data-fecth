@@ -219,16 +219,16 @@ async def _process_table_extraction_batch(page_data: Dict, batch_index: int, tot
     user_prompt = f"""Extract all product information strictly from the structured tables below.
 Return a JSON array where each element is a product with all its details.
 
-For EVERY product object, you MUST extract:
-- 'category': The high-level product line or section header (e.g., "FINISH & TRIM NAILERS"). Use the page text context to find the category if it is not in the table.
-- 'name': The specific descriptive name of the tool/product (e.g., "Cordless 15 GA Angled Finish Nailer"). Find this in the page text context directly above the table.
-- 'model': The alphanumeric part number, SKU code, or catalog identifier (e.g., "GFN1564K"). Look for it in specifications or column headers (like "SKU #", "Part #", or "Model #").
+For EVERY product object, extract the following core fields IF AND ONLY IF they exist in the text:
+- 'category': The high-level product line or section header (e.g., "FINISH & TRIM NAILERS"). If it's not explicitly in the page text or table, leave it blank. DO NOT GUESS.
+- 'name': The specific descriptive name of the tool/product (e.g., "Cordless 15 GA Angled Finish Nailer"). Do NOT use the SKU here.
+- 'model': The alphanumeric part number, SKU code, or catalog identifier (e.g., "GFN1564K"). Look for it in specifications or column headers (like "SKU #", "Part #", or "Model #"). If it's not present, leave it blank. DO NOT guess or infer a model number.
 
 Include any other available details as fields IF AND ONLY IF they exist in the table (e.g., specifications, features, dimensions, weight, capacity).
 
 CRITICAL ANTI-HALLUCINATION RULES:
-1. DO NOT invent, guess, or assume ANY values. 
-2. If a detail (like price, warranty, or dimensions) is NOT explicitly written in the table, you MUST omit the field completely. DO NOT make up fake prices.
+1. DO NOT invent, guess, or assume ANY values, including category and model. If it's not written in the text, it does not exist. Leave it blank or omit it entirely.
+2. If a detail (like price, warranty, or dimensions) is NOT explicitly written in the table, you MUST omit the field completely. DO NOT make up fake prices or specs.
 3. Map EVERY row of the table into a product object. Do not drop or skip any rows!
 4. DO NOT OUTPUT DUPLICATE ROWS. If multiple rows have exactly the same product data, only include it once.
 5. PRECISE DATA MATCHING: Ensure the extracted text matches the PDF table exactly, without typos or modifications.
@@ -347,14 +347,6 @@ async def extract_products_from_tables(
             else:
                 await asyncio.sleep(25)
 
-    # Forward-fill missing 'name' fields if any products are missing them, using the last known name.
-    last_known_name = ""
-    for p in all_products:
-        name = str(p.get("name", "")).strip()
-        if name and name not in ("—", "-", "None", "null", ""):
-            last_known_name = name
-        elif last_known_name:
-            p["name"] = last_known_name
 
     return all_products
 

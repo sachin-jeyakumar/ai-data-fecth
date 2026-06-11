@@ -76,13 +76,20 @@ export default function App() {
 
   // ── Manual extraction ─────────────────────────────────────────
   const handleExtract = useCallback(async (ids) => {
+    // If ids is not an array (e.g. it's a React mouse event from a button click),
+    // default to extracting ONLY the most recently uploaded document instead of all of them.
+    let targetIds = Array.isArray(ids) ? ids : [];
+    if (targetIds.length === 0 && docIds.length > 0) {
+      targetIds = [docIds[docIds.length - 1]];
+    }
+
     setExtracting(true);
     setExtractedData(null);
     setExtractionProgress(0);
     setExtractedCount(0);
     
     try {
-      const { data } = await extractProducts(ids || docIds);
+      const { data } = await extractProducts(targetIds);
       const jobId = data.job_id;
       
       if (!jobId) {
