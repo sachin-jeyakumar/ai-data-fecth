@@ -57,7 +57,7 @@ export default function ChatInput({ onSend, onUpload, isLoading, uploading, uplo
             e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
           }}
           onKeyDown={handleKey}
-          placeholder="Ask about your documents, or click 📎 to upload a PDF…"
+          placeholder="Ask a question or attach a brochure..."
           disabled={isLoading}
           rows={1}
           id="chat-input"
@@ -71,7 +71,7 @@ export default function ChatInput({ onSend, onUpload, isLoading, uploading, uplo
             disabled={uploading}
             id="upload-file-btn"
           >
-            📎
+            ＋
           </button>
           <input
             ref={fileRef}
@@ -90,13 +90,13 @@ export default function ChatInput({ onSend, onUpload, isLoading, uploading, uplo
           >
             {isLoading
               ? <span className="spinner" style={{ width: 14, height: 14 }} />
-              : '➤'}
+              : '→'}
           </button>
         </div>
       </div>
 
       <p className="input-hint">
-        Enter to send · Shift+Enter for new line · 📎 Upload PDF/brochure
+        Enter to send · Shift+Enter for new line · Attach PDF/brochure
       </p>
     </div>
   );

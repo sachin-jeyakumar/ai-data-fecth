@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+import dotenv
+dotenv.load_dotenv(Path(__file__).parent / ".env", override=True)
 from pydantic_settings import BaseSettings, SettingsConfigDict
  
 class Settings(BaseSettings):
@@ -16,7 +18,7 @@ class Settings(BaseSettings):
  
     # ── OpenRouter (Secondary cloud fallback) ──────────────────
     OPENROUTER_API_KEY:  str = ""
-    OPENROUTER_MODEL:    str = "meta-llama/llama-3.1-8b-instruct:free"
+    OPENROUTER_MODEL:    str = "meta-llama/llama-3.3-70b-instruct:free"
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
  
     # ── Ollama (Local offline fallback) ───────────────────────

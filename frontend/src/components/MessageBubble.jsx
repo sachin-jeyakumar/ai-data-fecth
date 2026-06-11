@@ -4,7 +4,7 @@ export default function MessageBubble({ message }) {
   return (
     <div className={`message ${isUser ? 'user' : 'ai'}`}>
       <div className={`avatar ${isUser ? 'user' : 'ai'}`}>
-        {isUser ? '👤' : '🤖'}
+        {isUser ? 'USR' : 'AI'}
       </div>
 
       <div className="bubble-wrap">

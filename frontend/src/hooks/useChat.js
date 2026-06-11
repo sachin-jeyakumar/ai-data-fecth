@@ -52,7 +52,7 @@ export function useChat(documentIds) {
       onError: (err) => {
         setMessages(prev => prev.map(m =>
           m.id === aiId
-            ? { ...m, content: `⚠️ Error: ${err}`, typing: false, error: true }
+            ? { ...m, content: `Error: ${err}`, typing: false, error: true }
             : m
         ));
         setIsLoading(false);

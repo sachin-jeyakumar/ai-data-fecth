@@ -266,6 +266,7 @@ async def chat(request: ChatRequest):
 
 # Extraction jobs in-memory registry: { job_id: { status, progress, products, columns, error } }
 _extraction_jobs: dict[str, dict] = {}
+_active_extraction_task: Optional[asyncio.Task] = None
 
 
 async def _run_extraction_background(job_id: str, doc_ids: List[str]):
@@ -395,7 +396,12 @@ async def extract_products(
         "error": None
     }
 
-    asyncio.create_task(_run_extraction_background(job_id, doc_ids))
+    global _active_extraction_task
+    if _active_extraction_task and not _active_extraction_task.done():
+        logger.info("Cancelling previous active extraction task to prevent rate limits and concurrent runs")
+        _active_extraction_task.cancel()
+
+    _active_extraction_task = asyncio.create_task(_run_extraction_background(job_id, doc_ids))
     return {"job_id": job_id, "status": "processing"}
 
 
@@ -425,7 +431,12 @@ async def extract_products_json(body: dict[str, Any]):
         "error": None
     }
 
-    asyncio.create_task(_run_extraction_background(job_id, doc_ids))
+    global _active_extraction_task
+    if _active_extraction_task and not _active_extraction_task.done():
+        logger.info("Cancelling previous active extraction task to prevent rate limits and concurrent runs")
+        _active_extraction_task.cancel()
+
+    _active_extraction_task = asyncio.create_task(_run_extraction_background(job_id, doc_ids))
     return {"job_id": job_id, "status": "processing"}
 
 

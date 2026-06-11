@@ -17,7 +17,8 @@ function Notification({ note, onDismiss }) {
 
   return (
     <div className={`notification ${note.type}`} onClick={onDismiss}>
-      {note.msg}
+      <span className="notif-icon">{note.type === 'success' ? '✓' : '✕'}</span>
+      <span className="notif-text">{note.msg}</span>
     </div>
   );
 }
@@ -67,21 +68,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // ── Auto-extract when a new document is added ─────────────────
-  const handleUpload = useCallback(async (file) => {
-    const doc = await addDocument(file);
-    if (!doc) return;
-    // Auto-trigger extraction on upload
-    setTimeout(() => handleExtract([doc.doc_id]), 500);
-  }, [addDocument]);
-
   // ── Manual extraction ─────────────────────────────────────────
   const handleExtract = useCallback(async (ids) => {
-    // If ids is not an array (e.g. it's a React mouse event from a button click),
-    // default to extracting ONLY the most recently uploaded document instead of all of them.
     let targetIds = Array.isArray(ids) ? ids : [];
     if (targetIds.length === 0 && docIds.length > 0) {
       targetIds = [docIds[docIds.length - 1]];
+    }
+
+    if (targetIds.length === 0) {
+      notify({ type: 'error', msg: '✕ Please mount a document first.' });
+      return;
     }
 
     setExtracting(true);
@@ -116,23 +112,33 @@ export default function App() {
             setExtractedData(job.products);
             setExtractColumns(job.columns || []);
             setExtracting(false);
-            notify({ type: 'success', msg: `✅ Extracted ${job.products.length} products!` });
+            notify({ type: 'success', msg: `Extracted ${job.products.length} products successfully!` });
           } else if (job.status === 'failed') {
             clearInterval(pollInterval);
             setExtracting(false);
-            notify({ type: 'error', msg: `❌ Extraction failed: ${job.error || 'Unknown error'}` });
+            notify({ type: 'error', msg: `Extraction failed: ${job.error || 'Unknown error'}` });
           }
         } catch (pollErr) {
           console.error("Polling extraction job failed", pollErr);
+          clearInterval(pollInterval);
+          setExtracting(false);
+          notify({ type: 'error', msg: 'Connection lost to server. Please try again.' });
         }
       }, 2000);
 
     } catch (err) {
       console.error("Triggering extraction failed", err);
-      notify({ type: 'error', msg: '❌ Extraction failed. Is Ollama running?' });
+      notify({ type: 'error', msg: 'Extraction failed. Please check backend server logs.' });
       setExtracting(false);
     }
   }, [docIds, notify]);
+
+  // ── Auto-extract when a new document is added ─────────────────
+  const handleUpload = useCallback(async (file) => {
+    const doc = await addDocument(file);
+    if (!doc) return;
+    setTimeout(() => handleExtract([doc.doc_id]), 500);
+  }, [addDocument, handleExtract]);
 
   // ── Excel download ────────────────────────────────────────────
   const handleDownloadExcel = useCallback(async () => {
@@ -140,9 +146,9 @@ export default function App() {
     setExcelLoading(true);
     try {
       await exportExcel(extractedData, 'product_data');
-      notify({ type: 'success', msg: '📥 Excel file downloaded!' });
+      notify({ type: 'success', msg: 'Excel file downloaded successfully!' });
     } catch {
-      notify({ type: 'error', msg: '❌ Excel export failed.' });
+      notify({ type: 'error', msg: 'Excel export failed.' });
     } finally {
       setExcelLoading(false);
     }
@@ -178,27 +184,28 @@ export default function App() {
       />
 
       <div className="main-area">
-        {/* Top bar */}
+        {/* Top Bar */}
         <div className="topbar">
           <div className="topbar-left">
-            <h1>Document Intelligence Chat</h1>
+            <h1>AI Data Assistant</h1>
             <p>
               {documents.length === 0
-                ? 'Upload a PDF to begin'
-                : `${documents.length} document${documents.length !== 1 ? 's' : ''} indexed · Ask anything`}
+                ? 'No documents mounted'
+                : `${documents.length} document${documents.length !== 1 ? 's' : ''} mounted · RAG Active`}
             </p>
           </div>
+
           <div className="topbar-actions">
             {documents.length > 0 && (
               <button
-                className="btn btn-ghost"
+                className="btn btn-primary"
                 onClick={() => handleExtract()}
                 disabled={extracting}
                 id="extract-btn"
               >
                 {extracting
-                  ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Extracting…</>
-                  : '⚡ Extract Data'
+                  ? <><span className="spinner btn-spinner" /> Extracting…</>
+                  : 'Run Extraction'
                 }
               </button>
             )}
@@ -210,14 +217,15 @@ export default function App() {
                 id="topbar-download-btn"
               >
                 {excelLoading
-                  ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Exporting…</>
-                  : '⬇️ Download Excel'
+                  ? <><span className="spinner btn-spinner" /> Exporting…</>
+                  : 'Export Excel'
                 }
               </button>
             )}
           </div>
         </div>
 
+        {/* Conversational Chat Feed */}
         <ChatWindow
           messages={messages}
           isLoading={isLoading}
@@ -231,7 +239,7 @@ export default function App() {
           extractedCount={extractedCount}
         />
 
-        {/* Input */}
+        {/* Floating Chat Input bar */}
         <ChatInput
           onSend={sendMessage}
           onUpload={handleUpload}

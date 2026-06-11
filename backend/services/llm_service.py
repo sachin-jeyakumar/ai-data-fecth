@@ -50,10 +50,10 @@ def _openrouter_headers() -> dict:
     }
 
 def _use_groq() -> bool:
-    return False
+    return bool(settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip())
 
 def _use_openrouter() -> bool:
-    return False
+    return bool(settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip())
 
 
 # ──────────────────────────────────────────────
@@ -67,13 +67,14 @@ If the answer is not in the context, say so honestly.
 When asked to extract data, return it as a structured list."""
 
 SYSTEM_EXTRACT = """You are a precise data extraction engine for a RAG-based document parser.
-Your ONLY job is to extract product information STRICTLY from the given text tables.
+Your ONLY job is to extract product information STRICTLY from the given page text and text tables.
 You MUST return valid JSON — nothing else.
 Extract EVERY product or item you find, with ALL available details.
 Be thorough and accurate. Do NOT output duplicate products.
 
 CRITICAL RAG RULE:
-You are strictly forbidden from using outside knowledge. You must ONLY use the exact text provided in the document context. If a value is not explicitly present in the provided text, omit it entirely. DO NOT hallucinate, guess, or bring in outside information.
+You are strictly forbidden from using outside knowledge. You must ONLY use the exact text provided in the document context. If a value is not explicitly present in the provided text, omit it entirely. DO NOT hallucinate, guess, invent, or bring in outside information.
+No permutations or combinations: Do NOT mix features or specifications across different products to create synthetic items. Only output products and specifications exactly as they are associated in the text.
 
 CRITICAL FIELD DEFINITIONS:
 1. 'category': The high-level product line or section header (e.g., "FINISH & TRIM NAILERS"). If a chunk lists multiple products under the same category, explicitly repeat that category for EACH AND EVERY product in the JSON array.
@@ -128,13 +129,17 @@ async def _openai_compat_complete(base_url: str, headers: dict, model: str, mess
         "temperature": 0.1,
     }
     async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(
-            f"{base_url}/chat/completions",
-            headers=headers,
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        try:
+            response = await client.post(
+                f"{base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as exc:
+            logger.error(f"HTTP error {exc.response.status_code} from {base_url}: {exc.response.text}")
+            raise
 
 
 # ──────────────────────────────────────────────
@@ -175,7 +180,9 @@ Answer based strictly on the context above."""
                 yield token
             return
         except Exception as exc:
-            logger.warning(f"Groq failed ({exc}), trying OpenRouter...")
+            logger.warning(f"Groq failed ({exc})")
+            if not _use_openrouter():
+                raise RuntimeError("Groq API failed, and no other API provider is configured.") from exc
 
     # ── 2. Try OpenRouter (secondary) ─────────
     if _use_openrouter():
@@ -187,20 +194,10 @@ Answer based strictly on the context above."""
                 yield token
             return
         except Exception as exc:
-            logger.warning(f"OpenRouter failed ({exc}), falling back to Ollama...")
+            logger.error(f"OpenRouter failed ({exc})")
+            raise RuntimeError("OpenRouter API failed, and no other API provider is configured.") from exc
 
-    # ── 3. Fallback: Local Ollama ──────────────
-    logger.info("Using local Ollama (offline fallback)")
-    async for chunk in await _get_ollama_client().chat(
-        model=settings.OLLAMA_LLM_MODEL,
-        messages=messages,
-        stream=True,
-        keep_alive=-1,
-        options={"num_ctx": 2048},
-    ):
-        token = chunk["message"]["content"]
-        if token:
-            yield token
+    raise RuntimeError("No active API providers configured (Groq and OpenRouter keys are missing).")
 
 
 async def _process_table_extraction_batch(page_data: Dict, batch_index: int, total_batches: int, state: Optional[dict] = None) -> List[Dict]:
@@ -260,8 +257,20 @@ Return ONLY the JSON array, no explanation."""
                 )
                 break
             except Exception as exc:
+                exc_str = ""
+                if hasattr(exc, "response") and exc.response is not None:
+                    exc_str = exc.response.text.lower()
+                else:
+                    exc_str = str(exc).lower()
+
+                if "tpd" in exc_str or "tokens per day" in exc_str or "daily" in exc_str or "rate limit reached" in exc_str:
+                    logger.warning(f"Groq daily token limit exceeded. Disabling Groq and falling back immediately. ({exc})")
+                    if state is not None:
+                        state["groq_disabled"] = True
+                    break
+
                 if attempt < retries - 1:
-                    sleep_time = 61 if "429" in str(exc) else 15
+                    sleep_time = 61 if ("429" in exc_str or "429" in str(exc).lower()) else 15
                     logger.warning(f"Groq attempt {attempt+1} failed ({exc}). Retrying in {sleep_time} seconds...")
                     import asyncio
                     await asyncio.sleep(sleep_time)
@@ -272,39 +281,53 @@ Return ONLY the JSON array, no explanation."""
 
     # ── 2. Try OpenRouter ──────────────────
     if raw is None and _use_openrouter() and not (state and state.get("openrouter_disabled", False)):
-        retries = 3
-        for attempt in range(retries):
-            try:
-                logger.info(f"OpenRouter extraction batch {batch_index}/{total_batches} (Attempt {attempt+1})")
-                raw = await _openai_compat_complete(
-                    settings.OPENROUTER_BASE_URL, _openrouter_headers(), settings.OPENROUTER_MODEL, messages
-                )
-                break
-            except Exception as exc:
-                if attempt < retries - 1:
-                    logger.warning(f"OpenRouter attempt {attempt+1} failed ({exc}). Retrying in 5 seconds...")
-                    import asyncio
-                    await asyncio.sleep(5)
-                else:
-                    if state is not None:
-                        state["openrouter_disabled"] = True
-                    logger.warning(f"OpenRouter extraction failed for batch {batch_index} ({exc}). Switching to local Ollama fallback for remaining batches.")
+        # Determine fallback models to try
+        default_model = settings.OPENROUTER_MODEL
+        models_to_try = [default_model]
+        for fallback_model in ["google/gemma-4-31b-it:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.2-3b-instruct:free", "nousresearch/hermes-3-llama-3.1-405b:free"]:
+            if fallback_model != default_model:
+                models_to_try.append(fallback_model)
+                
+        # If we identified a working model in a previous batch, try it first
+        current_working_model = state.get("openrouter_model") if state else None
+        if current_working_model and current_working_model in models_to_try:
+            models_to_try.remove(current_working_model)
+            models_to_try.insert(0, current_working_model)
 
-    # ── 3. Fallback: Ollama ────────────────
+        success = False
+        for model in models_to_try:
+            if success:
+                break
+            retries = 2  # Keep retries low per model to speed up fallback
+            for attempt in range(retries):
+                try:
+                    logger.info(f"OpenRouter extraction batch {batch_index}/{total_batches} using {model} (Attempt {attempt+1})")
+                    raw = await _openai_compat_complete(
+                        settings.OPENROUTER_BASE_URL, _openrouter_headers(), model, messages
+                    )
+                    success = True
+                    if state:
+                        state["openrouter_model"] = model
+                    break
+                except Exception as exc:
+                    exc_str = str(exc).lower()
+                    if attempt < retries - 1:
+                        sleep_time = 10 if "429" in exc_str else 5
+                        logger.warning(f"OpenRouter model {model} attempt {attempt+1} failed ({exc}). Retrying in {sleep_time}s...")
+                        import asyncio
+                        await asyncio.sleep(sleep_time)
+                    else:
+                        logger.warning(f"OpenRouter model {model} failed all attempts. Trying next fallback model...")
+
+        if not success:
+            if state is not None:
+                state["openrouter_disabled"] = True
+            logger.warning(f"OpenRouter extraction failed for batch {batch_index}. All OpenRouter fallback models failed.")
+
+    # ── 3. Fallback: Ollama (Disabled by user request) ────────────────
     if raw is None:
-        try:
-            logger.info(f"Ollama extraction batch {batch_index}/{total_batches} (offline fallback)")
-            response = await _get_ollama_client().chat(
-                model=settings.OLLAMA_LLM_MODEL,
-                messages=messages,
-                format="json",
-                keep_alive=-1,
-                options={"temperature": 0.1, "num_ctx": 4096},
-            )
-            raw = response["message"]["content"]
-        except Exception as exc:
-            logger.error(f"All providers failed for batch {batch_index}: {exc}")
-            return []
+        logger.error(f"All configured API providers failed for batch {batch_index}")
+        return []
 
     return _parse_json_products(raw)
 
@@ -322,7 +345,8 @@ async def extract_products_from_tables(
     total_batches = len(pdf_pages_data)
     state = {
         "groq_disabled": False,
-        "openrouter_disabled": False
+        "openrouter_disabled": False,
+        "openrouter_model": settings.OPENROUTER_MODEL
     }
 
     for idx, page_data in enumerate(pdf_pages_data):
@@ -340,13 +364,9 @@ async def extract_products_from_tables(
             except Exception as e:
                 logger.error(f"Error calling progress callback: {e}")
                 
-        # Pace requests with a 25-second sleep between batches to preserve rate limit window
+        # Pace requests with a 12-second sleep between batches to preserve rate limit window
         if batch_index < total_batches:
-            # If both cloud providers are disabled (local Ollama fallback active), run at max speed without sleep
-            if state.get("groq_disabled", False) and state.get("openrouter_disabled", False):
-                await asyncio.sleep(0.05)
-            else:
-                await asyncio.sleep(2)
+            await asyncio.sleep(12)
 
 
     return all_products

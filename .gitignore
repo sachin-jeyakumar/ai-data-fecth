@@ -33,3 +33,7 @@ frontend/node_modules/
 finetune/llama.cpp/
 finetune/output/
 finetune/training_data/
+
+# Temporary scratch folder
+scratch/
+

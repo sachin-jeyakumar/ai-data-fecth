@@ -8,7 +8,7 @@ Optimizations vs v1:
   - Table extraction wrapped more defensively
   - Logging improvements for timing visibility
 """
- 
+import re
 import uuid
 import logging
 import time
@@ -185,6 +185,22 @@ def _ocr_page(pdf_path: Path, page_index: int) -> str:
         logger.warning(f"OCR failed for page {page_index}: {exc}")
         return ""
 
+MODEL_REGEX = re.compile(r'\b(?=[A-Z]*[0-9])(?=[0-9]*[A-Z])[A-Z0-9-]{4,15}\b')
+KEYWORDS = {
+    "model", "sku", "part #", "part no", "cat #", "cat. no", "cat.no", "cat no",
+    "specifications", "specs", "weight", "dimensions", "capacity", "voltage",
+    "nailer", "stapler", "fastener", "gauge", "tool", "charger", "battery",
+    "compressor", "warranty", "price", "pack"
+}
+
+def _should_process_page(text: str) -> bool:
+    text_lower = text.lower()
+    if any(kw in text_lower for kw in KEYWORDS):
+        return True
+    if MODEL_REGEX.search(text):
+        return True
+    return False
+
 def extract_tables_for_orm(pdf_path: Path) -> list:
     """
     Extract structured tables and page text from the PDF.
@@ -212,9 +228,8 @@ def extract_tables_for_orm(pdf_path: Path) -> list:
                         if structured_table:
                             structured_tables.append(structured_table)
                 
-                # Append the page ONLY if it has actual physical tables.
-                # This prevents the AI from wasting 25 seconds parsing blank marketing pages!
-                if structured_tables:
+                # Filter out completely empty or cover/intro pages to save user tokens and API rate limits
+                if structured_tables or _should_process_page(text):
                     results.append({
                         "page": page_index + 1,
                         "text": text,  # Keep the full text for context
