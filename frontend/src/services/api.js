@@ -24,6 +24,8 @@ export const uploadDocument = (file, onProgress) => {
 
 export const deleteDocument = (docId) => api.delete(`/documents/${docId}`);
 
+export const deleteAllDocuments = () => api.delete('/documents');
+
 // ── Extract ───────────────────────────────────────
 export const extractProducts = (documentIds = []) =>
   api.post('/extract/json', { document_ids: documentIds });

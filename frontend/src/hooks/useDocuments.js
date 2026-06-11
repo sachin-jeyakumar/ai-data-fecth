@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { uploadDocument, deleteDocument } from '../services/api';
+import { uploadDocument, deleteDocument, deleteAllDocuments } from '../services/api';
 
 export function useDocuments(onNotify) {
   const [documents, setDocuments] = useState([]);
@@ -33,5 +33,14 @@ export function useDocuments(onNotify) {
     }
   }, [onNotify]);
 
-  return { documents, uploading, uploadProgress, addDocument, removeDocument };
+  const clearAllDocuments = useCallback(async () => {
+    try {
+      await deleteAllDocuments();
+      setDocuments([]);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  return { documents, uploading, uploadProgress, addDocument, removeDocument, clearAllDocuments };
 }

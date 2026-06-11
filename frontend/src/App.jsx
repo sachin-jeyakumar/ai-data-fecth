@@ -40,6 +40,7 @@ export default function App() {
     uploadProgress,
     addDocument,
     removeDocument,
+    clearAllDocuments,
   } = useDocuments(notify);
 
   const docIds = documents.map(d => d.doc_id);
@@ -148,11 +149,12 @@ export default function App() {
   }, [extractedData, notify]);
 
   // ── New session ───────────────────────────────────────────────
-  const handleNewSession = useCallback(() => {
+  const handleNewSession = useCallback(async () => {
     clearMessages();
     setExtractedData(null);
     setExtractColumns([]);
-  }, [clearMessages]);
+    await clearAllDocuments();
+  }, [clearMessages, clearAllDocuments]);
 
   // ── Quick prompt click ────────────────────────────────────────
   const handleQuickPrompt = useCallback((prompt) => {
