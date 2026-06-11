@@ -294,5 +294,21 @@
     "status": "ready",
     "path": "/Users/sachinjeyakumar/collage/7th sem intern/phase-1 (AI data fetcher)/backend/uploads/c1399ba5-808b-4781-8d8a-75024546a713_ITW-Construction-2024-Full-Line-Catalog-February-2024_2.pdf",
     "chunk_count": 136
+  },
+  "4239dd14-b3ba-4701-869b-e7740d13f6a7": {
+    "filename": "ITW-Construction-2024-Full-Line-Catalog-February-2024 2.pdf",
+    "page_count": 88,
+    "has_ocr": true,
+    "status": "ready",
+    "path": "/Users/sachinjeyakumar/collage/7th sem intern/phase-1 (AI data fetcher)/backend/uploads/4239dd14-b3ba-4701-869b-e7740d13f6a7_ITW-Construction-2024-Full-Line-Catalog-February-2024_2.pdf",
+    "chunk_count": 136
+  },
+  "440b273c-8021-405d-84fd-4a6bc89424ac": {
+    "filename": "ITW-Construction-2024-Full-Line-Catalog-February-2024 2.pdf",
+    "page_count": 88,
+    "has_ocr": true,
+    "status": "ready",
+    "path": "/Users/sachinjeyakumar/collage/7th sem intern/phase-1 (AI data fetcher)/backend/uploads/440b273c-8021-405d-84fd-4a6bc89424ac_ITW-Construction-2024-Full-Line-Catalog-February-2024_2.pdf",
+    "chunk_count": 136
   }
 }
