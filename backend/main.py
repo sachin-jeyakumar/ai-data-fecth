@@ -259,58 +259,93 @@ _extraction_jobs: dict[str, dict] = {}
 
 async def _run_extraction_background(job_id: str, doc_ids: List[str]):
     try:
-        # Retrieve all chunks for scanning
-        chunks = embedding_service.get_all_chunks(doc_ids=doc_ids)
-        if not chunks:
+        # Retrieve structured tables directly from the original PDFs (ORM approach)
+        pdf_pages_data = []
+        for doc_id in doc_ids:
+            doc_info = _document_registry.get(doc_id)
+            if not doc_info or "path" not in doc_info:
+                continue
+            
+            # Extract tables using pdfplumber
+            pages_with_tables = pdf_service.extract_tables_for_orm(Path(doc_info["path"]))
+            pdf_pages_data.extend(pages_with_tables)
+
+        if not pdf_pages_data:
             _extraction_jobs[job_id].update({
                 "status": "failed",
-                "error": "No indexed text chunks found in document(s)."
+                "error": "No tables found in the document(s) to extract."
             })
             return
 
-        # Estimate total batches from batch size of 6
-        batch_size = 6
-        total_batches = (len(chunks) + batch_size - 1) // batch_size
+        # The batches will be the pages with tables
+        total_batches = len(pdf_pages_data)
         _extraction_jobs[job_id].update({
             "total_batches": total_batches,
             "progress": 0
         })
 
+        def clean_products(product_list: list):
+            unique_products = []
+            seen = set()
+            for p in product_list:
+                serialized = json.dumps(p, sort_keys=True)
+                if serialized not in seen:
+                    seen.add(serialized)
+                    unique_products.append(p)
+                    
+            empty_values = {"", "-", "—", "None", "null", "N/A", "n/a"}
+            keys_to_remove = set()
+            
+            if unique_products:
+                all_keys = set()
+                for p in unique_products:
+                    all_keys.update(p.keys())
+                    
+                for k in all_keys:
+                    is_empty = True
+                    for p in unique_products:
+                        val = str(p.get(k, "")).strip()
+                        if val and val not in empty_values and val.lower() != "none" and val.lower() != "null":
+                            is_empty = False
+                            break
+                    if is_empty and k.lower() not in ("name", "model", "category"):
+                        keys_to_remove.add(k)
+                        
+                for p in unique_products:
+                    for k in keys_to_remove:
+                        if k in p:
+                            del p[k]
+                            
+            cols: list[str] = []
+            for p in unique_products:
+                for k in p.keys():
+                    if k not in cols:
+                        cols.append(k)
+            return unique_products, cols
+
         async def progress_callback(processed_batches: int, tot_batches: int, products: List[Dict]):
             job = _extraction_jobs.get(job_id)
             if job:
                 pct = int((processed_batches / tot_batches) * 100)
-                # Keep accumulating products from each batch
-                current_products = job.get("products", []) + products
+                raw_products = job.get("raw_products", []) + products
+                cleaned_products, cols = clean_products(raw_products)
                 
-                # Get unique columns so far
-                cols = list(job.get("columns", []))
-                for p in products:
-                    for k in p.keys():
-                        if k not in cols:
-                            cols.append(k)
-                            
                 job.update({
                     "progress": pct,
                     "processed_batches": processed_batches,
                     "total_batches": tot_batches,
-                    "products": current_products,
+                    "products": cleaned_products,
+                    "raw_products": raw_products,
                     "columns": cols
                 })
 
-        all_products = await llm_service.extract_products(chunks, on_progress=progress_callback)
-        
-        # Final unique columns pass
-        columns: list[str] = []
-        for p in all_products:
-            for k in p.keys():
-                if k not in columns:
-                    columns.append(k)
+        all_products = await llm_service.extract_products_from_tables(pdf_pages_data, on_progress=progress_callback)
+        cleaned_products, columns = clean_products(all_products)
 
         _extraction_jobs[job_id].update({
             "status": "completed",
             "progress": 100,
-            "products": all_products,
+            "products": cleaned_products,
             "columns": columns
         })
     except Exception as exc:

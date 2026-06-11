@@ -66,16 +66,19 @@ Always base your answers strictly on the provided document context.
 If the answer is not in the context, say so honestly.
 When asked to extract data, return it as a structured list."""
 
-SYSTEM_EXTRACT = """You are a precise data extraction engine.
-Your ONLY job is to extract product information from the given text.
+SYSTEM_EXTRACT = """You are a precise data extraction engine for a RAG-based document parser.
+Your ONLY job is to extract product information STRICTLY from the given text tables.
 You MUST return valid JSON — nothing else.
 Extract EVERY product or item you find, with ALL available details.
-Be thorough and accurate.
+Be thorough and accurate. Do NOT output duplicate products.
+
+CRITICAL RAG RULE:
+You are strictly forbidden from using outside knowledge. You must ONLY use the exact text provided in the document context. If a value is not explicitly present in the provided text, omit it entirely. DO NOT hallucinate, guess, or bring in outside information.
 
 CRITICAL FIELD DEFINITIONS:
-1. 'name': MUST be included for EVERY product object. It is the high-level product line, category, or section header (e.g., "FINISH & TRIM NAILERS"). If a chunk lists multiple products under the same category, you MUST explicitly repeat that category 'name' for EACH AND EVERY product in the JSON array. Do not use dashes or leave it blank.
-2. 'model': The specific descriptive name of the model/tool (e.g., "Cordless 15 GA Angled Finish Nailer"). Do NOT use the alphanumeric SKU or code as the model.
-3. 'sku': The alphanumeric part number, SKU code, or catalog identifier (e.g., "GFN1564K", "GBT1850K"). Check columns like "SKU #", "Part #", or "Model #".
+1. 'category': The high-level product line or section header (e.g., "FINISH & TRIM NAILERS"). If a chunk lists multiple products under the same category, explicitly repeat that category for EACH AND EVERY product in the JSON array.
+2. 'name': The specific descriptive name of the tool/product (e.g., "Cordless 15 GA Angled Finish Nailer").
+3. 'model': The alphanumeric part number, SKU code, or catalog identifier (e.g., "GFN1564K"). Look for it in specifications or column headers (like "SKU #", "Part #", or "Model #").
 """
 
 
@@ -200,21 +203,41 @@ Answer based strictly on the context above."""
             yield token
 
 
-async def _process_extraction_batch(batch: List[Dict], batch_index: int, total_batches: int, state: Optional[dict] = None) -> List[Dict]:
-    """Helper to process a single batch with fallback logic."""
-    context_text = _format_context(batch)
-    user_prompt = f"""Extract all product information from this document text.
+async def _process_table_extraction_batch(page_data: Dict, batch_index: int, total_batches: int, state: Optional[dict] = None) -> List[Dict]:
+    """Helper to process a single page's tables with fallback logic."""
+    page_num = page_data.get("page", "?")
+    page_text = page_data.get("text", "")
+    tables = page_data.get("tables", [])
+    
+    table_strings = []
+    for i, table in enumerate(tables):
+        table_strings.append(f"--- Table {i+1} ---")
+        for row in table:
+            table_strings.append(" | ".join(row))
+    tables_str = "\n".join(table_strings)
+
+    user_prompt = f"""Extract all product information strictly from the structured tables below.
 Return a JSON array where each element is a product with all its details.
 
 For EVERY product object, you MUST extract:
-- 'name': The high-level product line, category, or section header of the page/block (e.g., "FINISH & TRIM NAILERS", "CORDLESS NAILERS"). If multiple products share the same category, explicitly REPEAT the category name for EACH product. Do not leave it blank or use dashes.
-- 'model': The specific descriptive name of the model/tool (e.g., "Cordless 15 GA Angled Finish Nailer"). Never use the SKU code or alphanumeric model number as the model name.
-- 'sku': The alphanumeric part number, SKU code, or catalog identifier (e.g., "GFN1564K"). Look for it in specifications or column headers (like "SKU #", "Part #", or "Model #").
+- 'category': The high-level product line or section header (e.g., "FINISH & TRIM NAILERS"). Use the page text context to find the category if it is not in the table.
+- 'name': The specific descriptive name of the tool/product (e.g., "Cordless 15 GA Angled Finish Nailer"). Find this in the page text context directly above the table.
+- 'model': The alphanumeric part number, SKU code, or catalog identifier (e.g., "GFN1564K"). Look for it in specifications or column headers (like "SKU #", "Part #", or "Model #").
 
-Include any other available details as fields, such as: price, specifications, features, dimensions, weight, capacity, operating_pressure, warranty, description.
+Include any other available details as fields IF AND ONLY IF they exist in the table (e.g., specifications, features, dimensions, weight, capacity).
 
-DOCUMENT TEXT:
-{context_text}
+CRITICAL ANTI-HALLUCINATION RULES:
+1. DO NOT invent, guess, or assume ANY values. 
+2. If a detail (like price, warranty, or dimensions) is NOT explicitly written in the table, you MUST omit the field completely. DO NOT make up fake prices.
+3. Map EVERY row of the table into a product object. Do not drop or skip any rows!
+4. DO NOT OUTPUT DUPLICATE ROWS. If multiple rows have exactly the same product data, only include it once.
+5. PRECISE DATA MATCHING: Ensure the extracted text matches the PDF table exactly, without typos or modifications.
+
+PAGE TEXT CONTEXT (Headers/Descriptions):
+{page_text}
+
+STRUCTURED TABLES (Products):
+{tables_str}
 
 Return ONLY the JSON array, no explanation."""
 
@@ -286,26 +309,24 @@ Return ONLY the JSON array, no explanation."""
 
 import asyncio
 
-async def extract_products(
-    context_chunks: List[Dict],
+async def extract_products_from_tables(
+    pdf_pages_data: List[Dict],
     on_progress: Optional[Any] = None
 ) -> List[Dict[str, Any]]:
     """
-    Extract ALL product details from context as structured JSON.
-    Scans batches sequentially with pacing to respect rate limits.
+    Extract ALL product details from pdfplumber structured tables as JSON.
+    Scans pages sequentially with pacing to respect rate limits.
     """
     all_products = []
-    batch_size = 6  # Small enough to stay under TPM limit per request
-    batches = [context_chunks[i:i + batch_size] for i in range(0, len(context_chunks), batch_size)]
-    total_batches = len(batches)
+    total_batches = len(pdf_pages_data)
     state = {
         "groq_disabled": False,
         "openrouter_disabled": False
     }
 
-    for idx, batch in enumerate(batches):
+    for idx, page_data in enumerate(pdf_pages_data):
         batch_index = idx + 1
-        products = await _process_extraction_batch(batch, batch_index, total_batches, state)
+        products = await _process_table_extraction_batch(page_data, batch_index, total_batches, state)
         if products:
             all_products.extend(products)
         

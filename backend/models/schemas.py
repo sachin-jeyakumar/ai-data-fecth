@@ -57,6 +57,6 @@ class ExtractionResult(BaseModel):
 # ──────────────────────────────────────────────
 
 class ExcelExportRequest(BaseModel):
-    session_id: str
+    session_id: str = "default"
     data: list[dict[str, Any]]
     filename: str = "extracted_data"
