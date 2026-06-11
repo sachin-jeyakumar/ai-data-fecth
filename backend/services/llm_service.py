@@ -232,6 +232,7 @@ CRITICAL ANTI-HALLUCINATION RULES:
 3. Map every distinct product you find into a product object.
 4. DO NOT OUTPUT DUPLICATE ROWS. If multiple rows have exactly the same product data, only include it once.
 5. PRECISE DATA MATCHING: Ensure the extracted text matches the PDF exactly, without typos or modifications.
+6. ABSOLUTELY NO PERMUTATIONS OR COMBINATIONS. Do NOT mix and match features to create fake products. If the text says "15 GA Angled" and "16 GA Straight", DO NOT invent "15 GA Straight". Output ONLY the exact lines that physically exist in the text.
 
 PAGE TEXT CONTEXT (Contains products if tables are empty):
 {page_text}

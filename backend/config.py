@@ -11,7 +11,7 @@ class Settings(BaseSettings):
  
     # ── Groq (Primary — cloud, ~200 tok/sec, free) ────────────
     GROQ_API_KEY:  str = ""
-    GROQ_MODEL:    str = "llama-3.1-8b-instant"
+    GROQ_MODEL:    str = "llama-3.3-70b-versatile"
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
  
     # ── OpenRouter (Secondary cloud fallback) ──────────────────
