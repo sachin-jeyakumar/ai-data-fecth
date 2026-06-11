@@ -346,7 +346,7 @@ async def extract_products_from_tables(
             if state.get("groq_disabled", False) and state.get("openrouter_disabled", False):
                 await asyncio.sleep(0.05)
             else:
-                await asyncio.sleep(25)
+                await asyncio.sleep(2)
 
 
     return all_products
