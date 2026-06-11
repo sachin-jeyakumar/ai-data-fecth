@@ -1,8 +1,11 @@
 import axios from 'axios';
 
-const BASE = 'http://localhost:8000';
-
-const api = axios.create({ baseURL: BASE });
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  headers: {
+    'Bypass-Tunnel-Reminder': 'true'
+  }
+});
 
 // ── Health ────────────────────────────────────────
 export const getHealth = () => api.get('/health');
