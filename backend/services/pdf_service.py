@@ -212,11 +212,12 @@ def extract_tables_for_orm(pdf_path: Path) -> list:
                         if structured_table:
                             structured_tables.append(structured_table)
                 
-                # Append the page if it has text OR tables.
-                if text.strip() or structured_tables:
+                # Append the page ONLY if it has actual physical tables.
+                # This prevents the AI from wasting 25 seconds parsing blank marketing pages!
+                if structured_tables:
                     results.append({
                         "page": page_index + 1,
-                        "text": text,  # Keep the full text
+                        "text": text,  # Keep the full text for context
                         "tables": structured_tables
                     })
     except Exception as exc:
