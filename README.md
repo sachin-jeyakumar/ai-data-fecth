@@ -1,182 +1,68 @@
-# 🧠 AI Data Fetcher — Document Intelligence System
+# AI Data Fetcher
 
-An **in-house RAG-based AI system** that reads PDFs/brochures and automatically extracts structured product data into Excel — no cloud APIs, no recurring costs.
+A full-stack intelligent application that extracts product data from complex PDFs (such as tool catalogs or visual brochures) using advanced AI models, OCR, and PDF parsing, and exports the structured data to Excel.
 
----
+## Features
+- **Intelligent RAG Extraction**: Automatically uses Groq (Llama-3.1-8b) or OpenRouter to extract tables and text blocks into structured JSON.
+- **Offline Fallback**: Uses a local Ollama model (`qwen2.5:7b`) if internet or API keys fail.
+- **OCR Integration**: Reads scanned documents automatically via Tesseract.
+- **Excel Export**: Download styled `.xlsx` sheets natively from the browser.
 
-## Architecture
-
-```
-Frontend (React)  ←→  FastAPI Backend  ←→  Ollama (Local LLM)
-                           ↕
-                       ChromaDB (Vector Store)
-```
-
-| Component | Technology |
-|---|---|
-| Chat UI | React + Vite |
-| Backend API | FastAPI (Python) |
-| Local AI Model | Ollama · qwen2.5:14b |
-| Embeddings | nomic-embed-text |
-| PDF Parsing | pdfplumber + pytesseract OCR |
-| Vector Database | ChromaDB (local) |
-| Excel Export | pandas + openpyxl |
+## Tech Stack
+- **Frontend**: React + Vite + TailwindCSS
+- **Backend**: Python + FastAPI + Uvicorn + pdfplumber + Tesseract OCR
+- **Database**: ChromaDB (Vector store for embeddings)
 
 ---
 
-## Prerequisites
+## 🚀 Deployment (Production)
 
-### 1. Install Ollama
-```bash
-# macOS
-brew install ollama
+The easiest way to deploy this application on any server is using Docker. It handles installing all system dependencies (like Tesseract and Poppler) automatically.
 
-# Or download from https://ollama.com
+### Prerequisites
+- Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/).
+
+### 1. Setup API Keys
+Inside the `backend/` directory, ensure you have a `.env` file with your API keys:
+```env
+GROQ_API_KEY=your_groq_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
 
-### 2. Pull required models
+### 2. Run with Docker Compose
+Navigate to the root directory containing `docker-compose.yml` and run:
 ```bash
-# Main LLM (best for 32GB+ RAM)
-ollama pull qwen2.5:14b
-
-# Embedding model
-ollama pull nomic-embed-text
-
-# Start Ollama server (if not auto-started)
-ollama serve
+docker-compose up -d --build
 ```
 
-### 3. Install Tesseract OCR (for scanned PDFs)
-```bash
-# macOS
-brew install tesseract
+- The **Frontend** will be available at: `http://localhost:80` (or your server's IP address)
+- The **Backend API** will be available at: `http://localhost:8000`
 
-# Verify
-tesseract --version
+### 3. Updating the API URL (If deploying to a VPS/Cloud)
+If you deploy this to a remote server, the frontend running in the user's browser needs to know how to talk to the backend. Open `docker-compose.yml` and uncomment the `VITE_API_URL` arg under the `frontend` service, setting it to your server's public IP address or domain:
+```yaml
+      args:
+        VITE_API_URL: "http://YOUR-SERVER-IP:8000"
 ```
-
-### 4. Python 3.11+
-```bash
-python3 --version   # Should be 3.11 or higher
-```
+Then rebuild: `docker-compose up -d --build`
 
 ---
 
-## Setup & Run
+## 🛠️ Local Development
 
-### Backend
-
+### 1. Backend Setup
+Make sure you have `tesseract-ocr` and `poppler-utils` installed on your machine.
 ```bash
 cd backend
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate      # Mac/Linux
-# venv\Scripts\activate       # Windows
-
-# Install dependencies
+python -m venv venv
+source venv/bin/activate  # Or `venv\Scripts\activate` on Windows
 pip install -r requirements.txt
-
-# Start backend server
-python main.py
-# → Running on http://localhost:8000
-# → API docs: http://localhost:8000/docs
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Frontend
-
+### 2. Frontend Setup
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start dev server
 npm run dev
-# → Running on http://localhost:5173
 ```
-
----
-
-## Usage
-
-1. **Open** `http://localhost:5173` in your browser
-2. **Upload** a PDF brochure using the 📎 button or drag-and-drop
-3. The AI automatically **extracts product data** and shows it in a table
-4. Click **⬇️ Download Excel** to save the structured data
-5. You can also **chat** with the document: ask specific questions like:
-   - *"What are all the available models?"*
-   - *"List the prices for each product"*
-   - *"What are the technical specifications?"*
-
----
-
-## Project Structure
-
-```
-phase-1 (AI data fetcher)/
-├── backend/
-│   ├── main.py                  FastAPI app (all endpoints)
-│   ├── config.py                Settings & paths
-│   ├── requirements.txt
-│   ├── services/
-│   │   ├── pdf_service.py       PDF text extraction + OCR
-│   │   ├── embedding_service.py ChromaDB + embeddings
-│   │   ├── llm_service.py       Ollama LLM calls
-│   │   └── excel_service.py     Excel export
-│   ├── models/
-│   │   └── schemas.py           Pydantic models
-│   └── uploads/                 Uploaded files (auto-created)
-│
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx              Main app
-│   │   ├── components/          UI components
-│   │   ├── hooks/               React hooks
-│   │   └── services/api.js      Backend API client
-│   └── index.html
-│
-└── README.md
-```
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/health` | Check Ollama + system status |
-| POST | `/upload` | Upload & index a PDF |
-| GET | `/documents` | List indexed documents |
-| DELETE | `/documents/{id}` | Remove a document |
-| POST | `/chat` | Stream RAG chat response (SSE) |
-| POST | `/extract/json` | Extract structured product data |
-| POST | `/export/excel` | Download as .xlsx file |
-
----
-
-## Model Selection Guide
-
-| RAM | Recommended Model | Quality |
-|---|---|---|
-| 8 GB | `llama3.2:3b` | Good |
-| 16 GB | `llama3.1:8b` | Better |
-| **32 GB+** | **`qwen2.5:14b`** | **Best** |
-
-To change the model, edit `backend/config.py`:
-```python
-OLLAMA_LLM_MODEL: str = "qwen2.5:14b"
-```
-
----
-
-## Troubleshooting
-
-| Issue | Fix |
-|---|---|
-| "Ollama offline" in sidebar | Run `ollama serve` in terminal |
-| "Model not found" | Run `ollama pull qwen2.5:14b` |
-| OCR not working | Install Tesseract: `brew install tesseract` |
-| Slow extraction | Normal for 14B model — first run downloads model weights |
-| CORS error | Ensure backend is on port 8000 |
-# ai-data-fecth

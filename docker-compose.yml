@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: ai_fetcher_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/chroma_db:/app/chroma_db
+      - ./backend/.env:/app/.env
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    build: 
+      context: ./frontend
+      args:
+        # If deploying to a remote server, uncomment and change this to your server's IP
+        # VITE_API_URL: "http://your-server-ip:8000"
+    container_name: ai_fetcher_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
